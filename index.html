@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BookFinder 95 — Cyberpunk Reading Tracker</title>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Custom Windows 95 Cyberpunk Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       1. Boot splash screen (first-load retro BIOS feel)
+       ========================================================================== -->
+  <div id="boot-screen">
+    <div class="boot-logs" id="boot-logs-console">
+      <!-- Logs will be appended via app.js -->
+    </div>
+    
+    <div class="boot-logo-container">
+      <div class="boot-logo">BookFinder 95</div>
+      <div class="boot-subtitle">Cybernetic Library System</div>
+      <div class="boot-progress-container">
+        <div class="boot-progress-bar" id="boot-progress"></div>
+      </div>
+    </div>
+    
+    <div class="boot-footer">
+      <span>SYSTEM VERSION 4.00.950 | RAM: 16384 KB</span>
+      <button class="skip-btn" id="skip-boot-btn">Skip Boot [ESC]</button>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       2. Desktop Area (Icons + Draggable Windows)
+       ========================================================================== -->
+  <div id="desktop">
+    <!-- Desktop Shortcut: Book Search -->
+    <div class="desktop-icon" id="icon-search" data-window="search-window">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <span>Book Search</span>
+    </div>
+
+    <!-- Desktop Shortcut: Reading List -->
+    <div class="desktop-icon" id="icon-list" data-window="list-window">
+      <i class="fa-solid fa-book-bookmark"></i>
+      <span>Reading List</span>
+    </div>
+
+    <!-- Desktop Shortcut: About -->
+    <div class="desktop-icon" id="icon-about" data-window="about-window">
+      <i class="fa-solid fa-circle-info"></i>
+      <span>About App</span>
+    </div>
+
+    <!-- ==========================================================================
+         A. Book Search Window
+         ========================================================================== -->
+    <div id="search-window" class="win95-window win95-raised hidden">
+      <div class="title-bar" data-window="search-window">
+        <div class="title-bar-text">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>Book Search</span>
+        </div>
+        <div class="title-bar-controls">
+          <button class="win95-btn title-bar-btn" data-action="minimize" title="Minimize">_</button>
+          <button class="win95-btn title-bar-btn" data-action="maximize" title="Maximize">[ ]</button>
+          <button class="win95-btn title-bar-btn" data-action="close" title="Close">X</button>
+        </div>
+      </div>
+      
+      <div class="window-body">
+        <!-- Search input toolbar -->
+        <div class="search-toolbar">
+          <div class="search-input-wrapper win95-sunken">
+            <input type="text" id="search-input" placeholder="Type book title, author, or ISBN..." autocomplete="off">
+          </div>
+          <button class="win95-btn win95-raised search-btn" id="search-submit">
+            <i class="fa-solid fa-magnifying-glass"></i> Find
+          </button>
+        </div>
+
+        <!-- Scrollable Search Results Viewport -->
+        <div class="search-results-viewport win95-sunken custom-scrollbar" id="search-results">
+          <!-- Initial status display -->
+          <div class="no-results">
+            <i class="fa-solid fa-book-open"></i>
+            <p>Ready to search OpenLibrary database.</p>
+          </div>
+        </div>
+
+        <!-- Search window status bar -->
+        <div class="status-bar">
+          <div class="status-bar-field win95-sunken" id="search-status">Ready.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         B. Reading List Window
+         ========================================================================== -->
+    <div id="list-window" class="win95-window win95-raised hidden">
+      <div class="title-bar" data-window="list-window">
+        <div class="title-bar-text">
+          <i class="fa-solid fa-book-bookmark"></i>
+          <span>Reading List</span>
+        </div>
+        <div class="title-bar-controls">
+          <button class="win95-btn title-bar-btn" data-action="minimize" title="Minimize">_</button>
+          <button class="win95-btn title-bar-btn" data-action="maximize" title="Maximize">[ ]</button>
+          <button class="win95-btn title-bar-btn" data-action="close" title="Close">X</button>
+        </div>
+      </div>
+      
+      <div class="window-body">
+        <!-- Reading list filters & statistics -->
+        <div class="list-toolbar">
+          <div class="list-filters">
+            <span>Filter:</span>
+            <div class="win95-sunken" style="display:inline-block;">
+              <select id="list-filter-select">
+                <option value="all">All Books</option>
+                <option value="want">Want to Read</option>
+                <option value="read">Read</option>
+              </select>
+            </div>
+          </div>
+          <div class="list-stats" id="list-stats">
+            Read: <span id="stats-read">0</span> | Want: <span id="stats-want">0</span>
+          </div>
+        </div>
+
+        <!-- Scrollable Reading List Grid/Table -->
+        <div class="reading-list-viewport win95-sunken custom-scrollbar" id="reading-list-container">
+          <!-- Real-time database reading list content is loaded here -->
+        </div>
+
+        <!-- Reading list window status bar -->
+        <div class="status-bar">
+          <div class="status-bar-field win95-sunken" id="list-status">Initializing system database...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         C. About BookFinder 95 Modal Window
+         ========================================================================== -->
+    <div id="about-window" class="win95-window win95-raised hidden">
+      <div class="title-bar" data-window="about-window">
+        <div class="title-bar-text">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>About BookFinder 95</span>
+        </div>
+        <div class="title-bar-controls">
+          <button class="win95-btn title-bar-btn" data-action="close" title="Close">X</button>
+        </div>
+      </div>
+      
+      <div class="window-body" style="padding: 15px;">
+        <div class="about-logo-area">
+          <i class="fa-solid fa-book-skull about-icon"></i>
+          <span class="about-title">BookFinder 95</span>
+        </div>
+        <p class="about-text">
+          A personal library search and reading log styled as a Windows 95 desktop, fused with neon cyberpunk styling accents.
+          <br><br>
+          Developed for the net-runners of the 21st century. Connects directly to OpenLibrary API for searching and Firebase Firestore for persistent synchronization.
+        </p>
+        <button class="win95-btn win95-raised about-footer-btn" data-action="close">OK</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==========================================================================
+       3. Start Menu popup component
+       ========================================================================== -->
+  <div id="start-menu" class="win95-raised hidden">
+    <div class="start-menu-sidebar">
+      <div class="start-menu-sidebar-text">BookFinder95</div>
+    </div>
+    
+    <div class="start-menu-list">
+      <button class="start-menu-item" data-window="search-window">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <span>Book Search</span>
+      </button>
+      
+      <button class="start-menu-item" data-window="list-window">
+        <i class="fa-solid fa-book-bookmark"></i>
+        <span>Reading List</span>
+      </button>
+      
+      <button class="start-menu-item" data-window="about-window">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>About App</span>
+      </button>
+      
+      <div class="start-menu-divider"></div>
+      
+      <button class="start-menu-item" id="start-menu-shutdown">
+        <i class="fa-solid fa-power-off"></i>
+        <span>Shut Down...</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       4. Taskbar (Bottom Control Bar)
+       ========================================================================== -->
+  <div id="taskbar" class="win95-raised">
+    <div class="taskbar-left">
+      <!-- Start Button -->
+      <button class="win95-btn win95-raised start-btn" id="start-button">
+        <i class="fa-solid fa-network-wired"></i> Start
+      </button>
+      
+      <!-- Running applications buttons (tabs) -->
+      <div class="taskbar-tabs-container" id="taskbar-tabs">
+        <!-- Dynamically managed via app.js -->
+      </div>
+    </div>
+    
+    <!-- System Tray -->
+    <div class="system-tray win95-sunken">
+      <!-- DB connection status -->
+      <div class="db-status" id="tray-db-status" title="Connection Mode">
+        <div class="status-dot" id="tray-db-dot"></div>
+        <span id="tray-db-text">Local</span>
+      </div>
+      
+      <!-- Tray Clock -->
+      <div class="tray-clock" id="tray-clock">00:00 AM</div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       5. Shutdown overlay (safe shutdown state screen)
+       ========================================================================== -->
+  <div id="shutdown-overlay" class="hidden">
+    <i class="fa-solid fa-terminal"></i>
+    <p style="font-size: 24px; font-weight: bold; margin-bottom: 10px;">IT IS NOW SAFE TO TURN OFF</p>
+    <p style="font-size: 24px; font-weight: bold; margin-bottom: 30px;">YOUR BOOKFINDER TERMINAL.</p>
+    <button class="win95-btn win95-raised" id="reboot-btn" style="padding: 6px 15px; font-weight: bold; color: var(--win-white); border: 1px solid var(--neon-blue);">
+      Reboot System
+    </button>
+  </div>
+
+  <!-- ==========================================================================
+       6. Script Imports
+       ========================================================================== -->
+  <!-- Firebase modular SDK bundles loaded via CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js"
+      }
+    }
+  </script>
+  
+  <script type="module" src="app.js"></script>
+</body>
+</html>
