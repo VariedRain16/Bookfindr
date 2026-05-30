@@ -1,5 +1,5 @@
 /* ==========================================================================
-   BookFinder 95 — Core Client Application Logic
+   BookFinder 95 — Core Client Application Logic (Unified Web App Mode)
    ========================================================================== */
 
 import { initializeApp } from "firebase/app";
@@ -16,7 +16,7 @@ import {
   serverTimestamp 
 } from "firebase/firestore";
 
-// Firebase Configuration (Replace with your own settings)
+// Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyC6ZM4CvkWtxQtnCq8sFIZFuoCldk7c-w4",
   authDomain: "bookfindr-565a6.firebaseapp.com",
@@ -29,7 +29,6 @@ const firebaseConfig = {
 // State Variables
 let db = null;
 let isFirebaseActive = false;
-let activeWindows = []; // Tracks order of windows for z-index
 let readingList = [];    // Local copy of books for rendering and filtering
 let savedBookKeys = new Set(); // Set of OL book keys currently saved in the reading list
 
@@ -55,7 +54,7 @@ async function runBootScreen() {
   
   if (!consoleEl) return;
   
-  const logDelay = 220;
+  const logDelay = 180;
   
   for (let i = 0; i < BOOT_LOG_LINES.length; i++) {
     const line = document.createElement("div");
@@ -141,12 +140,19 @@ function updateDbStatusTray() {
 }
 
 /* ==========================================================================
-   Desktop & Window Manager Implementation
+   Application Desktop Initialization
    ========================================================================== */
 function initDesktop() {
   updateClock();
   setInterval(updateClock, 1000);
   
+  // Start menu trigger toggle
+  document.getElementById("start-button").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleStartMenu();
+  });
+
+  // Register click outside for Start Menu
   document.addEventListener("click", (e) => {
     const startMenu = document.getElementById("start-menu");
     const startBtn = document.getElementById("start-button");
@@ -158,11 +164,22 @@ function initDesktop() {
     }
   });
 
-  initWindowManager();
-  
-  showWindow("search-window");
-  showWindow("list-window");
-  
+  // Focus layout highlights on panel clicks
+  const searchPanel = document.getElementById("search-panel");
+  const listPanel = document.getElementById("list-panel");
+
+  if (searchPanel && listPanel) {
+    searchPanel.addEventListener("pointerdown", () => {
+      searchPanel.classList.add("active");
+      listPanel.classList.remove("active");
+    });
+    listPanel.addEventListener("pointerdown", () => {
+      listPanel.classList.add("active");
+      searchPanel.classList.remove("active");
+    });
+  }
+
+  // Load Reading List Sync
   loadReadingList();
 }
 
@@ -199,187 +216,15 @@ function toggleStartMenu(forceState) {
   }
 }
 
-// Window manager configurations
-function initWindowManager() {
-  const windows = document.querySelectorAll(".win95-window");
-  
-  activeWindows = Array.from(windows).map(win => win.id);
-  
-  windows.forEach(win => {
-    const titleBar = win.querySelector(".title-bar");
-    
-    win.addEventListener("pointerdown", () => {
-      bringToFront(win.id);
-    });
-
-    if (titleBar) {
-      titleBar.addEventListener("pointerdown", (e) => {
-        if (e.pointerType === "mouse" && e.button !== 0) return;
-        if (e.target.closest(".title-bar-btn")) return;
-        if (win.classList.contains("maximized")) return;
-        
-        bringToFront(win.id);
-        
-        const rect = win.getBoundingClientRect();
-        const offsetX = e.clientX - rect.left;
-        const offsetY = e.clientY - rect.top;
-        
-        titleBar.setPointerCapture(e.pointerId);
-        
-        function onPointerMove(moveEvent) {
-          let left = moveEvent.clientX - offsetX;
-          let top = moveEvent.clientY - offsetY;
-          
-          const desktopRect = document.body.getBoundingClientRect();
-          const taskbarHeight = 40;
-          
-          left = Math.max(-rect.width + 50, Math.min(left, desktopRect.width - 50));
-          top = Math.max(0, Math.min(top, desktopRect.height - taskbarHeight - 20));
-          
-          win.style.left = left + "px";
-          win.style.top = top + "px";
-          win.style.transform = "none";
-        }
-        
-        function onPointerUp(upEvent) {
-          titleBar.releasePointerCapture(upEvent.pointerId);
-          titleBar.removeEventListener("pointermove", onPointerMove);
-          titleBar.removeEventListener("pointerup", onPointerUp);
-        }
-        
-        titleBar.addEventListener("pointermove", onPointerMove);
-        titleBar.addEventListener("pointerup", onPointerUp);
-      });
-    }
-
-    const minBtn = win.querySelector('[data-action="minimize"]');
-    const maxBtn = win.querySelector('[data-action="maximize"]');
-    const closeBtns = win.querySelectorAll('[data-action="close"]');
-    
-    if (minBtn) {
-      minBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        minimizeWindow(win.id);
-      });
-    }
-    
-    if (maxBtn) {
-      maxBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        toggleMaximizeWindow(win.id);
-      });
-    }
-    
-    closeBtns.forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        closeWindow(win.id);
-      });
-    });
-  });
+// About Modal Actions
+function showAboutModal() {
+  const modal = document.getElementById("about-modal-overlay");
+  if (modal) modal.classList.remove("hidden");
 }
 
-function bringToFront(id) {
-  const win = document.getElementById(id);
-  if (!win) return;
-  
-  activeWindows = activeWindows.filter(wId => wId !== id);
-  activeWindows.push(id);
-  
-  activeWindows.forEach((wId, idx) => {
-    const currentWin = document.getElementById(wId);
-    const tabEl = document.getElementById(`tab-${wId}`);
-    
-    if (currentWin) {
-      if (wId === id) {
-        currentWin.style.zIndex = 100;
-        currentWin.classList.add("active");
-        if (tabEl) tabEl.classList.add("active");
-      } else {
-        currentWin.style.zIndex = 10 + idx;
-        currentWin.classList.remove("active");
-        if (tabEl) tabEl.classList.remove("active");
-      }
-    }
-  });
-}
-
-function showWindow(id) {
-  const win = document.getElementById(id);
-  if (!win) return;
-  
-  win.classList.remove("hidden");
-  win.classList.remove("minimized");
-  
-  upsertTaskbarTab(id);
-  bringToFront(id);
-}
-
-function closeWindow(id) {
-  const win = document.getElementById(id);
-  if (!win) return;
-  
-  win.classList.add("hidden");
-  removeTaskbarTab(id);
-}
-
-function minimizeWindow(id) {
-  const win = document.getElementById(id);
-  if (!win) return;
-  
-  win.classList.add("minimized");
-  
-  const tabEl = document.getElementById(`tab-${id}`);
-  if (tabEl) tabEl.classList.remove("active");
-}
-
-function toggleMaximizeWindow(id) {
-  const win = document.getElementById(id);
-  if (!win) return;
-  
-  win.classList.toggle("maximized");
-  
-  const maxBtn = win.querySelector('[data-action="maximize"]');
-  if (maxBtn) {
-    maxBtn.textContent = win.classList.contains("maximized") ? "[#]" : "[ ]";
-  }
-}
-
-// Taskbar tabs management
-function upsertTaskbarTab(windowId) {
-  const tabsContainer = document.getElementById("taskbar-tabs");
-  if (!tabsContainer) return;
-  
-  let tab = document.getElementById(`tab-${windowId}`);
-  const titleText = document.querySelector(`#${windowId} .title-bar-text span`).textContent;
-  const iconClass = document.querySelector(`#${windowId} .title-bar-text i`).className;
-  
-  if (!tab) {
-    tab = document.createElement("button");
-    tab.id = `tab-${windowId}`;
-    tab.className = "win95-btn win95-raised taskbar-tab";
-    tab.innerHTML = `<i class="${iconClass}"></i><span>${titleText}</span>`;
-    
-    tab.addEventListener("click", () => {
-      const win = document.getElementById(windowId);
-      if (win.classList.contains("minimized") || win.classList.contains("hidden")) {
-        showWindow(windowId);
-      } else if (win.classList.contains("active")) {
-        minimizeWindow(windowId);
-      } else {
-        bringToFront(windowId);
-      }
-    });
-    
-    tabsContainer.appendChild(tab);
-  }
-}
-
-function removeTaskbarTab(windowId) {
-  const tab = document.getElementById(`tab-${windowId}`);
-  if (tab) {
-    tab.remove();
-  }
+function hideAboutModal() {
+  const modal = document.getElementById("about-modal-overlay");
+  if (modal) modal.classList.add("hidden");
 }
 
 /* ==========================================================================
@@ -388,6 +233,7 @@ function removeTaskbarTab(windowId) {
 async function searchBooks(query) {
   const resultsContainer = document.getElementById("search-results");
   const statusEl = document.getElementById("search-status");
+  const taskbarStatus = document.getElementById("taskbar-status");
   
   if (!query.trim()) return;
   
@@ -398,6 +244,7 @@ async function searchBooks(query) {
     </div>
   `;
   statusEl.textContent = `Searching for "${query}"...`;
+  if (taskbarStatus) taskbarStatus.textContent = `Querying OpenLibrary database for "${query}"...`;
   
   try {
     const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}`;
@@ -417,6 +264,7 @@ async function searchBooks(query) {
         </div>
       `;
       statusEl.textContent = "Search complete. 0 matches found.";
+      if (taskbarStatus) taskbarStatus.textContent = "Search complete. 0 matches found.";
       return;
     }
     
@@ -432,7 +280,6 @@ async function searchBooks(query) {
       
       const card = cardWrapper.firstElementChild;
       
-      // Hook save click
       const saveBtn = card.querySelector(".save-btn");
       if (saveBtn) {
         saveBtn.addEventListener("click", () => {
@@ -451,6 +298,7 @@ async function searchBooks(query) {
     
     resultsContainer.appendChild(grid);
     statusEl.textContent = `Found ${data.docs.length} books in Library network.`;
+    if (taskbarStatus) taskbarStatus.textContent = `Search successful. Rendered ${data.docs.length} matches.`;
     
   } catch (error) {
     console.error("OpenLibrary search failed:", error);
@@ -461,7 +309,8 @@ async function searchBooks(query) {
         <span style="font-size:10px; color:#ff3b30;">${escapeHTML(error.message)}</span>
       </div>
     `;
-    statusEl.textContent = "Search failed due to a network connection error.";
+    statusEl.textContent = "Search failed.";
+    if (taskbarStatus) taskbarStatus.textContent = "Search failed due to API connectivity failure.";
   }
 }
 
@@ -643,7 +492,6 @@ async function deleteBook(docId) {
   
   statusEl.textContent = "Deleting record...";
   
-  // Find key to remove from savedBookKeys tracker
   let targetKey = "";
   if (isFirebaseActive) {
     const book = readingList.find(b => b.docId === docId);
@@ -749,11 +597,25 @@ function renderReadingListContainer() {
       <div class="empty-list">
         <i class="fa-solid fa-ghost"></i>
         <p>No books matching the selected filter state.</p>
-        <button class="win95-btn win95-raised" onclick="document.getElementById('icon-search').dispatchEvent(new Event('dblclick'))">
+        <button class="win95-btn win95-raised" id="find-empty-btn">
           Find Books
         </button>
       </div>
     `;
+    
+    const findBtn = container.querySelector("#find-empty-btn");
+    if (findBtn) {
+      findBtn.addEventListener("click", () => {
+        const searchInput = document.getElementById("search-input");
+        if (searchInput) searchInput.focus();
+        const searchPanel = document.getElementById("search-panel");
+        const listPanel = document.getElementById("list-panel");
+        if (searchPanel && listPanel) {
+          searchPanel.classList.add("active");
+          listPanel.classList.remove("active");
+        }
+      });
+    }
     return;
   }
   
@@ -835,44 +697,44 @@ window.addEventListener("DOMContentLoaded", () => {
   initFirebase();
   runBootScreen();
   
-  document.querySelectorAll(".desktop-icon").forEach(icon => {
-    icon.addEventListener("dblclick", () => {
-      showWindow(icon.dataset.window);
-    });
-    
-    let lastTap = 0;
-    icon.addEventListener("touchend", () => {
-      const currentTime = new Date().getTime();
-      const tapLength = currentTime - lastTap;
-      if (tapLength < 300 && tapLength > 0) {
-        showWindow(icon.dataset.window);
-      }
-      lastTap = currentTime;
-    });
-  });
-  
-  document.getElementById("start-button").addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggleStartMenu();
-  });
-  
-  document.querySelectorAll(".start-menu-item").forEach(item => {
-    item.addEventListener("click", () => {
+  // Start menu items click
+  const aboutTrigger = document.getElementById("start-about-trigger");
+  if (aboutTrigger) {
+    aboutTrigger.addEventListener("click", () => {
       toggleStartMenu(false);
-      
-      const windowId = item.dataset.window;
-      if (windowId) {
-        showWindow(windowId);
-      }
+      showAboutModal();
     });
-  });
-  
-  document.querySelectorAll('#about-window [data-action="close"]').forEach(btn => {
-    btn.addEventListener("click", () => {
-      closeWindow("about-window");
+  }
+
+  // Dropdown menu file shutdown triggers
+  const fileShutdown = document.getElementById("menu-file-shutdown");
+  if (fileShutdown) {
+    fileShutdown.addEventListener("click", () => {
+      showShutdown();
     });
-  });
+  }
+
+  const helpAbout = document.getElementById("menu-help-about");
+  if (helpAbout) {
+    helpAbout.addEventListener("click", () => {
+      showAboutModal();
+    });
+  }
+
+  const titleClose = document.getElementById("title-bar-close");
+  if (titleClose) {
+    titleClose.addEventListener("click", () => {
+      showShutdown();
+    });
+  }
   
+  // About window close triggers
+  const aboutClose = document.getElementById("about-close-btn");
+  const aboutOk = document.getElementById("about-ok-btn");
+  if (aboutClose) aboutClose.addEventListener("click", hideAboutModal);
+  if (aboutOk) aboutOk.addEventListener("click", hideAboutModal);
+  
+  // OpenLibrary Search submit hooks
   const searchInput = document.getElementById("search-input");
   const searchBtn = document.getElementById("search-submit");
   
@@ -888,6 +750,7 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
   
+  // Reading List Filter Dropdown change hook
   const filterSelect = document.getElementById("list-filter-select");
   if (filterSelect) {
     filterSelect.addEventListener("change", () => {
@@ -895,24 +758,30 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
   
+  // System Shutdown overlays
   const shutdownBtn = document.getElementById("start-menu-shutdown");
   const rebootBtn = document.getElementById("reboot-btn");
   const shutdownOverlay = document.getElementById("shutdown-overlay");
   
+  function showShutdown() {
+    toggleStartMenu(false);
+    if (shutdownOverlay) shutdownOverlay.classList.remove("hidden");
+  }
+
   if (shutdownBtn) {
     shutdownBtn.addEventListener("click", () => {
-      toggleStartMenu(false);
-      shutdownOverlay.classList.remove("hidden");
+      showShutdown();
     });
   }
   
   if (rebootBtn) {
     rebootBtn.addEventListener("click", () => {
-      shutdownOverlay.classList.add("hidden");
+      if (shutdownOverlay) shutdownOverlay.classList.add("hidden");
       window.location.reload();
     });
   }
   
+  // Boot Skip Keyboard hook (ESC)
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       dismissBootScreen();
