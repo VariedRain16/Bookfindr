@@ -10,22 +10,6 @@
 </head>
 <body>
 
-  <!-- Boot Screen -->
-  <div id="boot-screen">
-    <div class="boot-logs" id="boot-logs-console"></div>
-    <div class="boot-logo-container">
-      <div class="boot-logo">BookFinder 95</div>
-      <div class="boot-subtitle">Cybernetic Library System</div>
-      <div class="boot-progress-container">
-        <div class="boot-progress-bar" id="boot-progress"></div>
-      </div>
-    </div>
-    <div class="boot-footer">
-      <span>SYSTEM VERSION 4.00.950 &nbsp;|&nbsp; RAM: 16384 KB</span>
-      <button class="skip-btn" id="skip-boot-btn">Skip [ESC]</button>
-    </div>
-  </div>
-
   <!-- Main App Window -->
   <div id="app-window" class="win95-raised">
 
@@ -47,6 +31,11 @@
       <div class="menu-item" tabindex="0">
         <span>File</span>
         <div class="dropdown-menu">
+          <button class="dropdown-item" id="menu-file-auth">
+            <i class="fa-solid fa-right-to-bracket" id="menu-file-auth-icon"></i>
+            <span id="menu-file-auth-text">Sign In...</span>
+          </button>
+          <div class="start-menu-divider" id="menu-file-divider"></div>
           <button class="dropdown-item" id="menu-file-shutdown">
             <i class="fa-solid fa-power-off"></i> Shut Down...
           </button>
@@ -159,6 +148,15 @@
         <span id="tray-db-text">Local</span>
       </div>
       <div class="tray-sep"></div>
+      <!-- Auth user info (hidden until signed in) -->
+      <div class="tray-user hidden" id="tray-user">
+        <img class="tray-avatar" id="tray-avatar" src="" alt="User">
+        <span class="tray-username" id="tray-username"></span>
+        <button class="tray-signout-btn" id="tray-signout-btn" title="Sign out">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+      <div class="tray-sep" id="tray-auth-sep"></div>
       <div class="tray-clock" id="tray-clock">12:00 PM</div>
     </div>
   </div>
@@ -171,6 +169,11 @@
     <div class="start-menu-list">
       <button class="start-menu-item" id="start-about-trigger">
         <i class="fa-solid fa-circle-info"></i> About App
+      </button>
+      <div class="start-menu-divider"></div>
+      <button class="start-menu-item" id="start-auth-trigger">
+        <i class="fa-solid fa-right-to-bracket" id="start-auth-icon"></i>
+        <span id="start-auth-text">Sign In...</span>
       </button>
       <div class="start-menu-divider"></div>
       <button class="start-menu-item" id="start-menu-shutdown">
@@ -209,6 +212,40 @@
     </div>
   </div>
 
+  <!-- Sign-In Dialog (shown when not authenticated) -->
+  <div id="signin-overlay" class="modal-overlay">
+    <div class="win95-raised modal-window signin-window">
+      <div class="title-bar">
+        <div class="title-bar-text">
+          <i class="fa-solid fa-book-skull"></i>
+          <span>BookFinder 95 — Welcome</span>
+        </div>
+      </div>
+      <div class="modal-body signin-body">
+        <div class="signin-logo">
+          <i class="fa-solid fa-book-skull signin-icon"></i>
+          <div>
+            <div class="about-title">BookFinder 95</div>
+            <div class="about-version">Cybernetic Library System</div>
+          </div>
+        </div>
+        <p class="signin-text">
+          Sign in with your Google account to save your reading list to the cloud and sync it across devices.
+        </p>
+        <div class="signin-actions">
+          <button class="win95-btn win95-raised signin-google-btn" id="signin-google-btn">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" class="google-icon">
+            Sign in with Google
+          </button>
+          <button class="win95-btn signin-guest-btn" id="signin-guest-btn">
+            <i class="fa-solid fa-user-secret"></i> Continue as Guest
+          </button>
+        </div>
+        <p class="signin-disclaimer">Guest mode uses local storage only — data stays on this device.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Shutdown Screen -->
   <div id="shutdown-overlay" class="hidden">
     <i class="fa-solid fa-power-off"></i>
@@ -223,8 +260,9 @@
   <script type="importmap">
     {
       "imports": {
-        "firebase/app": "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js",
-        "firebase/firestore": "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js"
+        "firebase/app":      "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js",
+        "firebase/firestore":"https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js",
+        "firebase/auth":     "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"
       }
     }
   </script>

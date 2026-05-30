@@ -6,6 +6,8 @@ import { initializeApp }     from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
          updateDoc, deleteDoc, doc, query, orderBy,
          serverTimestamp }   from "firebase/firestore";
+import { getAuth, signInWithPopup, GoogleAuthProvider,
+         signOut, onAuthStateChanged } from "firebase/auth";
 
 // ── Firebase Config ─────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -19,59 +21,13 @@ const firebaseConfig = {
 
 // ── App State ───────────────────────────────────────────────────────────────
 let db               = null;
+let auth             = null;
+let currentUser      = null;
+let isGuestMode      = false;
+let unsubscribeSnapshot = null;
 let isFirebaseActive = false;
 let readingList      = [];
 let savedBookKeys    = new Set();
-
-/* ==========================================================================
-   BOOT SCREEN
-   ========================================================================== */
-const BOOT_LINES = [
-  "AMIBIOS (C) 1995 American Megatrends Inc.",
-  "BOOKFINDER COMPUTER CORP. SYSTEM V4.00.950",
-  "CPU: Cyrix 6x86 P166+ @ 133 MHz",
-  "Memory Test: 16384 KB OK",
-  "Detecting Primary Master ... CyberDisk 1.2GB",
-  "Detecting Primary Slave  ... CD-ROM 4x",
-  "Loading CyberOS Device Drivers ... OK",
-  "Connecting to Virtual Library Core ... OK",
-  "Initializing Neon Glow Engine ... OK",
-  "Checking Database Service ...",
-];
-
-async function runBootScreen() {
-  const log  = document.getElementById("boot-logs-console");
-  const bar  = document.getElementById("boot-progress");
-  if (!log) return;
-
-  for (let i = 0; i < BOOT_LINES.length; i++) {
-    const line = document.createElement("div");
-    line.textContent = "   " + BOOT_LINES[i];
-    log.appendChild(line);
-    log.scrollTop = log.scrollHeight;
-    bar.style.width = Math.floor((i + 1) / BOOT_LINES.length * 100) + "%";
-    await sleep(190);
-  }
-
-  const final = document.createElement("div");
-  final.textContent = isFirebaseActive
-    ? "   Database: FIRESTORE LIVE SYNC ACTIVE."
-    : "   Database: USING LOCAL STORAGE (OFFLINE MODE).";
-  log.appendChild(final);
-  bar.style.width = "100%";
-  await sleep(550);
-  dismissBoot();
-}
-
-function dismissBoot() {
-  const el = document.getElementById("boot-screen");
-  if (!el || el.classList.contains("fade-out")) return;
-  el.classList.add("fade-out");
-  setTimeout(() => { el.style.display = "none"; }, 750);
-  initApp();
-}
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* ==========================================================================
    FIREBASE / LOCAL-STORAGE INIT
@@ -84,19 +40,113 @@ function initFirebase() {
     try {
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
+      auth = getAuth(app);
       isFirebaseActive = true;
+      setupAuthListener();
     } catch (e) {
       console.warn("Firebase init failed, using localStorage:", e);
+      isFirebaseActive = false;
+      continueAsGuest();
+    }
+  } else {
+    isFirebaseActive = false;
+    continueAsGuest();
+  }
+}
+
+function setupAuthListener() {
+  if (!auth) return;
+  onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    if (user) {
+      isGuestMode = false;
+      document.getElementById("signin-overlay")?.classList.add("hidden");
+      updateAuthUI(true);
+      loadReadingList();
+    } else {
+      updateAuthUI(false);
+      if (isGuestMode) {
+        document.getElementById("signin-overlay")?.classList.add("hidden");
+        loadReadingList();
+      } else {
+        document.getElementById("signin-overlay")?.classList.remove("hidden");
+      }
+    }
+    updateTray();
+  });
+}
+
+function updateAuthUI(signedIn) {
+  const fileAuthText = document.getElementById("menu-file-auth-text");
+  const fileAuthIcon = document.getElementById("menu-file-auth-icon");
+  const startAuthText = document.getElementById("start-auth-text");
+  const startAuthIcon = document.getElementById("start-auth-icon");
+  const trayUser = document.getElementById("tray-user");
+  const trayAvatar = document.getElementById("tray-avatar");
+  const trayUsername = document.getElementById("tray-username");
+  const trayAuthSep = document.getElementById("tray-auth-sep");
+
+  if (signedIn && currentUser) {
+    if (fileAuthText) fileAuthText.textContent = "Sign Out";
+    if (fileAuthIcon) fileAuthIcon.className = "fa-solid fa-right-from-bracket";
+    if (startAuthText) startAuthText.textContent = "Sign Out";
+    if (startAuthIcon) startAuthIcon.className = "fa-solid fa-right-from-bracket";
+
+    if (trayUser) {
+      trayUser.classList.remove("hidden");
+      if (trayAvatar) trayAvatar.src = currentUser.photoURL || "https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg";
+      if (trayUsername) trayUsername.textContent = currentUser.displayName || currentUser.email || "User";
+    }
+    if (trayAuthSep) trayAuthSep.classList.remove("hidden");
+  } else {
+    if (fileAuthText) fileAuthText.textContent = "Sign In...";
+    if (fileAuthIcon) fileAuthIcon.className = "fa-solid fa-right-to-bracket";
+    if (startAuthText) startAuthText.textContent = "Sign In...";
+    if (startAuthIcon) startAuthIcon.className = "fa-solid fa-right-to-bracket";
+
+    if (trayUser) {
+      trayUser.classList.add("hidden");
+      if (trayAuthSep) trayAuthSep.classList.add("hidden");
     }
   }
+}
+
+async function handleAuthClick() {
+  if (currentUser) {
+    if (confirm("Are you sure you want to sign out?")) {
+      try {
+        await signOut(auth);
+      } catch (e) {
+        console.error("Sign out error:", e);
+      }
+    }
+  } else {
+    document.getElementById("signin-overlay")?.classList.remove("hidden");
+  }
+}
+
+async function signInWithGoogle() {
+  const provider = new GoogleAuthProvider();
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    console.error("Sign in failed:", e);
+    alert("Sign in failed. Make sure Google Auth is enabled in the Firebase Console.\nError: " + e.message);
+  }
+}
+
+function continueAsGuest() {
+  isGuestMode = true;
+  document.getElementById("signin-overlay")?.classList.add("hidden");
   updateTray();
+  loadReadingList();
 }
 
 function updateTray() {
   const dot  = document.getElementById("tray-db-dot");
   const text = document.getElementById("tray-db-text");
   if (!dot || !text) return;
-  if (isFirebaseActive) {
+  if (isFirebaseActive && currentUser) {
     dot.classList.add("online");
     text.textContent = "Firestore";
   } else {
@@ -127,8 +177,6 @@ function initApp() {
       toggleStartMenu(false);
     }
   });
-
-  loadReadingList();
 }
 
 function setActivePanel(id) {
@@ -284,12 +332,12 @@ async function saveBook(data, btn) {
     year:    data.year,
     coverId: data.coverId,
     status:  "want",
-    savedAt: isFirebaseActive ? serverTimestamp() : new Date().toISOString(),
+    savedAt: (isFirebaseActive && currentUser) ? serverTimestamp() : new Date().toISOString(),
   };
 
   try {
-    if (isFirebaseActive) {
-      await addDoc(collection(db, "books"), payload);
+    if (isFirebaseActive && currentUser) {
+      await addDoc(collection(db, "users", currentUser.uid, "books"), payload);
     } else {
       const list = localGet();
       list.unshift(payload);
@@ -309,10 +357,16 @@ async function saveBook(data, btn) {
 
 function loadReadingList() {
   const status = document.getElementById("list-status");
-  if (isFirebaseActive) {
+
+  if (unsubscribeSnapshot) {
+    unsubscribeSnapshot();
+    unsubscribeSnapshot = null;
+  }
+
+  if (isFirebaseActive && currentUser) {
     status.textContent = "Connecting to Firestore…";
-    const q = query(collection(db, "books"), orderBy("savedAt", "desc"));
-    onSnapshot(q, snap => {
+    const q = query(collection(db, "users", currentUser.uid, "books"), orderBy("savedAt", "desc"));
+    unsubscribeSnapshot = onSnapshot(q, snap => {
       readingList = [];
       savedBookKeys.clear();
       snap.forEach(d => {
@@ -325,9 +379,8 @@ function loadReadingList() {
       status.textContent = "Firestore sync active.";
     }, err => {
       console.error(err);
-      isFirebaseActive = false;
-      updateTray();
-      loadReadingList();
+      status.textContent = "Sync error. Using local storage.";
+      onLocalChange();
     });
   } else {
     onLocalChange();
@@ -347,8 +400,8 @@ function onLocalChange() {
 
 async function toggleStatus(docId, current) {
   const next = current === "read" ? "want" : "read";
-  if (isFirebaseActive) {
-    await updateDoc(doc(db, "books", docId), { status: next });
+  if (isFirebaseActive && currentUser) {
+    await updateDoc(doc(db, "users", currentUser.uid, "books", docId), { status: next });
   } else {
     const list  = localGet();
     const idx   = parseInt(docId);
@@ -359,8 +412,8 @@ async function toggleStatus(docId, current) {
 async function deleteBook(docId) {
   if (!confirm("Remove this book from your list?")) return;
   const book = readingList.find(b => b.docId === docId);
-  if (isFirebaseActive) {
-    await deleteDoc(doc(db, "books", docId));
+  if (isFirebaseActive && currentUser) {
+    await deleteDoc(doc(db, "users", currentUser.uid, "books", docId));
   } else {
     const list = localGet();
     list.splice(parseInt(docId), 1);
@@ -477,11 +530,17 @@ function escHTML(s) {
    ========================================================================== */
 window.addEventListener("DOMContentLoaded", () => {
   initFirebase();
-  runBootScreen();
+  initApp();
 
-  // Skip boot
-  document.getElementById("skip-boot-btn")?.addEventListener("click", dismissBoot);
-  window.addEventListener("keydown", e => { if (e.key === "Escape") dismissBoot(); });
+  // Sign In / Sign Out wiring
+  document.getElementById("signin-google-btn")?.addEventListener("click", signInWithGoogle);
+  document.getElementById("signin-guest-btn")?.addEventListener("click", continueAsGuest);
+  document.getElementById("menu-file-auth")?.addEventListener("click", handleAuthClick);
+  document.getElementById("start-auth-trigger")?.addEventListener("click", () => {
+    toggleStartMenu(false);
+    handleAuthClick();
+  });
+  document.getElementById("tray-signout-btn")?.addEventListener("click", handleAuthClick);
 
   // Search
   const inp = document.getElementById("search-input");

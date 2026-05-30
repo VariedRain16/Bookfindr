@@ -78,80 +78,6 @@ html, body {
 }
 .win95-btn:hover { filter: brightness(1.05); }
 
-/* ── Boot Screen ────────────────────────────────────────────────────────────── */
-#boot-screen {
-  position: fixed; inset: 0; z-index: 9999;
-  background: #030303;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: space-between;
-  padding: 32px 24px 24px;
-  color: var(--neon-blue);
-  font-family: 'Share Tech Mono', monospace;
-  transition: opacity 0.7s ease;
-}
-#boot-screen.fade-out { opacity: 0; pointer-events: none; }
-
-.boot-logs {
-  align-self: flex-start;
-  width: 100%; max-width: 620px;
-  font-size: 13px; line-height: 1.7;
-  text-shadow: 0 0 6px rgba(0,212,255,0.5);
-  overflow: hidden;
-}
-
-.boot-logo-container {
-  display: flex; flex-direction: column;
-  align-items: center; text-align: center;
-  gap: 6px;
-}
-.boot-logo {
-  font-family: 'VT323', monospace;
-  font-size: 88px; line-height: 1;
-  color: var(--win-white);
-  text-shadow: 0 0 14px var(--neon-blue), 0 0 40px rgba(0,212,255,0.4);
-}
-.boot-subtitle {
-  font-size: 14px; letter-spacing: 5px;
-  text-transform: uppercase;
-  color: var(--neon-blue);
-  text-shadow: var(--neon-glow-sm);
-  margin-bottom: 20px;
-}
-.boot-progress-container {
-  width: 300px; height: 22px;
-  padding: 3px;
-  background: #000;
-  border: 2px solid var(--win-grey-dark);
-}
-.boot-progress-bar {
-  height: 100%; width: 0%;
-  background: repeating-linear-gradient(
-    90deg, var(--neon-blue) 0 12px, transparent 12px 16px
-  );
-  box-shadow: var(--neon-glow-sm);
-  transition: width 0.08s linear;
-}
-
-.boot-footer {
-  display: flex; flex-direction: column;
-  align-items: center; gap: 10px;
-  font-size: 11px; color: var(--win-grey-dark);
-}
-.skip-btn {
-  background: transparent;
-  border: 1px solid var(--neon-dim);
-  color: var(--neon-blue);
-  padding: 4px 14px;
-  cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px; text-transform: uppercase;
-  transition: all 0.25s;
-}
-.skip-btn:hover {
-  background: var(--neon-dim);
-  box-shadow: var(--neon-glow-sm);
-  color: #fff;
-}
 
 /* ── App Window ─────────────────────────────────────────────────────────────── */
 #app-window {
@@ -670,6 +596,67 @@ html, body {
 .about-version { font-size: 11px; color: #666; }
 .about-text { font-size: 12px; line-height: 1.6; color: #333; margin-bottom: 14px; }
 .modal-footer { display: flex; justify-content: flex-end; }
+
+/* ── Sign-In Modal ──────────────────────────────────────────────────────────── */
+.signin-window {
+  width: 380px;
+}
+.signin-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+.signin-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--win-grey-dark);
+  padding-bottom: 16px;
+}
+.signin-icon {
+  font-size: 38px;
+  color: var(--neon-blue);
+  text-shadow: var(--neon-glow);
+}
+.signin-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #333;
+}
+.signin-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.signin-google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: bold;
+}
+.signin-google-btn .google-icon {
+  width: 18px;
+  height: 18px;
+}
+.signin-guest-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px;
+  font-size: 12px;
+}
+.signin-disclaimer {
+  font-size: 10px;
+  color: var(--win-grey-dark);
+  text-align: center;
+  margin-top: 4px;
+}
 
 /* ── Shutdown Overlay ───────────────────────────────────────────────────────── */
 #shutdown-overlay {
