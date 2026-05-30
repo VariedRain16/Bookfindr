@@ -1,797 +1,529 @@
 /* ==========================================================================
-   BookFinder 95 — Core Client Application Logic (Unified Web App Mode)
+   BookFinder 95 — App Logic (Unified Single-Window Mode)
    ========================================================================== */
 
-import { initializeApp } from "firebase/app";
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  onSnapshot, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  query, 
-  orderBy, 
-  serverTimestamp 
-} from "firebase/firestore";
+import { initializeApp }     from "firebase/app";
+import { getFirestore, collection, addDoc, onSnapshot,
+         updateDoc, deleteDoc, doc, query, orderBy,
+         serverTimestamp }   from "firebase/firestore";
 
-// Firebase Configuration
+// ── Firebase Config ─────────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyC6ZM4CvkWtxQtnCq8sFIZFuoCldk7c-w4",
-  authDomain: "bookfindr-565a6.firebaseapp.com",
-  projectId: "bookfindr-565a6",
-  storageBucket: "bookfindr-565a6.firebasestorage.app",
+  apiKey:            "AIzaSyC6ZM4CvkWtxQtnCq8sFIZFuoCldk7c-w4",
+  authDomain:        "bookfindr-565a6.firebaseapp.com",
+  projectId:         "bookfindr-565a6",
+  storageBucket:     "bookfindr-565a6.firebasestorage.app",
   messagingSenderId: "212049655393",
-  appId: "1:212049655393:web:df048e231afd30151e9c20"
+  appId:             "1:212049655393:web:df048e231afd30151e9c20"
 };
 
-// State Variables
-let db = null;
+// ── App State ───────────────────────────────────────────────────────────────
+let db               = null;
 let isFirebaseActive = false;
-let readingList = [];    // Local copy of books for rendering and filtering
-let savedBookKeys = new Set(); // Set of OL book keys currently saved in the reading list
+let readingList      = [];
+let savedBookKeys    = new Set();
 
 /* ==========================================================================
-   Boot Screen Simulation & BIOS Logs
+   BOOT SCREEN
    ========================================================================== */
-const BOOT_LOG_LINES = [
-  "AMIBIOS (C) 1995 American Megatrends, Inc.",
+const BOOT_LINES = [
+  "AMIBIOS (C) 1995 American Megatrends Inc.",
   "BOOKFINDER COMPUTER CORP. SYSTEM V4.00.950",
-  "CPU: Cyrix 6x86 P166+ clocking at 133 MHz",
+  "CPU: Cyrix 6x86 P166+ @ 133 MHz",
   "Memory Test: 16384 KB OK",
-  "Detecting IDE Primary Master ... CyberDisk 1.2GB",
-  "Detecting IDE Primary Slave  ... CyberDrive CD-ROM 4x",
+  "Detecting Primary Master ... CyberDisk 1.2GB",
+  "Detecting Primary Slave  ... CD-ROM 4x",
   "Loading CyberOS Device Drivers ... OK",
   "Connecting to Virtual Library Core ... OK",
-  "Initializing Cyberpunk Glow Engine ... OK",
-  "Checking Database Service Core ...",
+  "Initializing Neon Glow Engine ... OK",
+  "Checking Database Service ...",
 ];
 
 async function runBootScreen() {
-  const consoleEl = document.getElementById("boot-logs-console");
-  const progressEl = document.getElementById("boot-progress");
-  
-  if (!consoleEl) return;
-  
-  const logDelay = 180;
-  
-  for (let i = 0; i < BOOT_LOG_LINES.length; i++) {
+  const log  = document.getElementById("boot-logs-console");
+  const bar  = document.getElementById("boot-progress");
+  if (!log) return;
+
+  for (let i = 0; i < BOOT_LINES.length; i++) {
     const line = document.createElement("div");
-    line.textContent = "   " + BOOT_LOG_LINES[i];
-    consoleEl.appendChild(line);
-    
-    consoleEl.scrollTop = consoleEl.scrollHeight;
-    
-    const pct = Math.floor(((i + 1) / BOOT_LOG_LINES.length) * 100);
-    progressEl.style.width = pct + "%";
-    
-    await delay(logDelay);
+    line.textContent = "   " + BOOT_LINES[i];
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+    bar.style.width = Math.floor((i + 1) / BOOT_LINES.length * 100) + "%";
+    await sleep(190);
   }
 
-  const finalLine = document.createElement("div");
-  finalLine.textContent = isFirebaseActive 
-    ? "   Database Status: FIRESTORE LIVE CONNECTIVITY ESTABLISHED."
-    : "   Database Status: NO CONFIG DETECTED. FALLING BACK TO CYBER-RAM (LOCAL STORAGE).";
-  consoleEl.appendChild(finalLine);
-  consoleEl.scrollTop = consoleEl.scrollHeight;
-  progressEl.style.width = "100%";
-  
-  await delay(600);
-  dismissBootScreen();
+  const final = document.createElement("div");
+  final.textContent = isFirebaseActive
+    ? "   Database: FIRESTORE LIVE SYNC ACTIVE."
+    : "   Database: USING LOCAL STORAGE (OFFLINE MODE).";
+  log.appendChild(final);
+  bar.style.width = "100%";
+  await sleep(550);
+  dismissBoot();
 }
 
-function dismissBootScreen() {
-  const bootScreen = document.getElementById("boot-screen");
-  if (bootScreen && !bootScreen.classList.contains("fade-out")) {
-    bootScreen.classList.add("fade-out");
-    setTimeout(() => {
-      bootScreen.style.display = "none";
-    }, 800);
-    initDesktop();
-  }
+function dismissBoot() {
+  const el = document.getElementById("boot-screen");
+  if (!el || el.classList.contains("fade-out")) return;
+  el.classList.add("fade-out");
+  setTimeout(() => { el.style.display = "none"; }, 750);
+  initApp();
 }
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* ==========================================================================
-   Database Core (Firebase & LocalStorage dual mode)
+   FIREBASE / LOCAL-STORAGE INIT
    ========================================================================== */
 function initFirebase() {
-  const isPlaceholder = 
-    !firebaseConfig.apiKey || 
-    firebaseConfig.apiKey.startsWith("YOUR_") || 
-    firebaseConfig.projectId.startsWith("YOUR_");
+  const placeholder =
+    !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith("YOUR_");
 
-  if (!isPlaceholder) {
+  if (!placeholder) {
     try {
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       isFirebaseActive = true;
-      console.log("Firebase Firestore initialized successfully.");
-    } catch (err) {
-      console.error("Firebase connection failed, falling back to Local Storage:", err);
-      isFirebaseActive = false;
+    } catch (e) {
+      console.warn("Firebase init failed, using localStorage:", e);
     }
-  } else {
-    console.log("Using placeholder Firebase credentials. Loading app in Local Storage fallback mode.");
-    isFirebaseActive = false;
   }
-  
-  updateDbStatusTray();
+  updateTray();
 }
 
-function updateDbStatusTray() {
-  const dotEl = document.getElementById("tray-db-dot");
-  const textEl = document.getElementById("tray-db-text");
-  const trayEl = document.getElementById("tray-db-status");
-  
+function updateTray() {
+  const dot  = document.getElementById("tray-db-dot");
+  const text = document.getElementById("tray-db-text");
+  if (!dot || !text) return;
   if (isFirebaseActive) {
-    dotEl.classList.add("online");
-    textEl.textContent = "Firestore";
-    trayEl.title = "Connected to Firebase Firestore (Realtime)";
+    dot.classList.add("online");
+    text.textContent = "Firestore";
   } else {
-    dotEl.classList.remove("online");
-    textEl.textContent = "Local DB";
-    trayEl.title = "Connected to Local Storage Fallback Mode";
+    dot.classList.remove("online");
+    text.textContent = "Local";
   }
 }
 
 /* ==========================================================================
-   Application Desktop Initialization
+   APP INIT (runs after boot)
    ========================================================================== */
-function initDesktop() {
+function initApp() {
+  // Clock
   updateClock();
   setInterval(updateClock, 1000);
-  
-  // Start menu trigger toggle
-  document.getElementById("start-button").addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggleStartMenu();
+
+  // Panel focus toggling
+  ["search-panel", "list-panel"].forEach(id => {
+    document.getElementById(id)?.addEventListener("pointerdown", () => setActivePanel(id));
   });
 
-  // Register click outside for Start Menu
-  document.addEventListener("click", (e) => {
-    const startMenu = document.getElementById("start-menu");
-    const startBtn = document.getElementById("start-button");
-    
-    if (startMenu && !startMenu.classList.contains("hidden")) {
-      if (!startMenu.contains(e.target) && !startBtn.contains(e.target)) {
-        toggleStartMenu(false);
-      }
+  // Close click outside start menu
+  document.addEventListener("click", e => {
+    const menu = document.getElementById("start-menu");
+    const btn  = document.getElementById("start-button");
+    if (menu && !menu.classList.contains("hidden") &&
+        !menu.contains(e.target) && !btn.contains(e.target)) {
+      toggleStartMenu(false);
     }
   });
 
-  // Focus layout highlights on panel clicks
-  const searchPanel = document.getElementById("search-panel");
-  const listPanel = document.getElementById("list-panel");
-
-  if (searchPanel && listPanel) {
-    searchPanel.addEventListener("pointerdown", () => {
-      searchPanel.classList.add("active");
-      listPanel.classList.remove("active");
-    });
-    listPanel.addEventListener("pointerdown", () => {
-      listPanel.classList.add("active");
-      searchPanel.classList.remove("active");
-    });
-  }
-
-  // Load Reading List Sync
   loadReadingList();
 }
 
-// System Tray Clock
-function updateClock() {
-  const clockEl = document.getElementById("tray-clock");
-  if (!clockEl) return;
-  const now = new Date();
-  let hours = now.getHours();
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  
-  clockEl.textContent = `${hours}:${minutes} ${ampm}`;
-}
-
-// Start Menu Toggling
-function toggleStartMenu(forceState) {
-  const menu = document.getElementById("start-menu");
-  const btn = document.getElementById("start-button");
-  if (!menu || !btn) return;
-  
-  const show = typeof forceState === "boolean" ? forceState : menu.classList.contains("hidden");
-  
-  if (show) {
-    menu.classList.remove("hidden");
-    btn.classList.add("pressed");
-    menu.style.zIndex = 2000;
-  } else {
-    menu.classList.add("hidden");
-    btn.classList.remove("pressed");
-  }
-}
-
-// About Modal Actions
-function showAboutModal() {
-  const modal = document.getElementById("about-modal-overlay");
-  if (modal) modal.classList.remove("hidden");
-}
-
-function hideAboutModal() {
-  const modal = document.getElementById("about-modal-overlay");
-  if (modal) modal.classList.add("hidden");
+function setActivePanel(id) {
+  document.getElementById("search-panel")?.classList.toggle("active", id === "search-panel");
+  document.getElementById("list-panel")?.classList.toggle("active", id === "list-panel");
 }
 
 /* ==========================================================================
-   OpenLibrary Book Search Engine
+   CLOCK
    ========================================================================== */
-async function searchBooks(query) {
-  const resultsContainer = document.getElementById("search-results");
-  const statusEl = document.getElementById("search-status");
-  const taskbarStatus = document.getElementById("taskbar-status");
-  
-  if (!query.trim()) return;
-  
-  resultsContainer.innerHTML = `
-    <div class="no-results">
+function updateClock() {
+  const el = document.getElementById("tray-clock");
+  if (!el) return;
+  const d = new Date();
+  let h   = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const a = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  el.textContent = `${h}:${m} ${a}`;
+}
+
+/* ==========================================================================
+   START MENU
+   ========================================================================== */
+function toggleStartMenu(force) {
+  const menu = document.getElementById("start-menu");
+  const btn  = document.getElementById("start-button");
+  if (!menu) return;
+  const show = typeof force === "boolean" ? force : menu.classList.contains("hidden");
+  menu.classList.toggle("hidden", !show);
+  btn?.classList.toggle("active", show);
+}
+
+/* ==========================================================================
+   SHUTDOWN / ABOUT
+   ========================================================================== */
+function showShutdown() {
+  toggleStartMenu(false);
+  document.getElementById("shutdown-overlay")?.classList.remove("hidden");
+}
+
+function showAbout()   { document.getElementById("about-modal-overlay")?.classList.remove("hidden"); }
+function hideAbout()   { document.getElementById("about-modal-overlay")?.classList.add("hidden"); }
+
+/* ==========================================================================
+   BOOK SEARCH — OpenLibrary
+   ========================================================================== */
+async function searchBooks(q) {
+  q = q.trim();
+  if (!q) return;
+
+  const results = document.getElementById("search-results");
+  const status  = document.getElementById("search-status");
+  setActivePanel("search-panel");
+
+  results.innerHTML = `
+    <div class="empty-state">
       <i class="fa-solid fa-spinner fa-spin"></i>
-      <p>Consulting Library Network databases for "${escapeHTML(query)}"...</p>
-    </div>
-  `;
-  statusEl.textContent = `Searching for "${query}"...`;
-  if (taskbarStatus) taskbarStatus.textContent = `Querying OpenLibrary database for "${query}"...`;
-  
+      <p>Querying Library Network for "${escHTML(q)}"…</p>
+    </div>`;
+  status.textContent = `Searching for "${q}"…`;
+
   try {
-    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}`;
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`OpenLibrary API returned error state ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.docs || data.docs.length === 0) {
-      resultsContainer.innerHTML = `
-        <div class="no-results">
+    const url  = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    if (!data.docs?.length) {
+      results.innerHTML = `
+        <div class="empty-state">
           <i class="fa-solid fa-face-frown"></i>
-          <p>No matches found in cyber-archives. Check spellings.</p>
-        </div>
-      `;
-      statusEl.textContent = "Search complete. 0 matches found.";
-      if (taskbarStatus) taskbarStatus.textContent = "Search complete. 0 matches found.";
+          <p>No results found for "${escHTML(q)}".</p>
+        </div>`;
+      status.textContent = "0 results found.";
       return;
     }
-    
-    resultsContainer.innerHTML = "";
+
     const grid = document.createElement("div");
     grid.className = "results-grid";
-    
+
     data.docs.forEach(book => {
-      const cardHtml = renderResultCard(book);
-      const cardWrapper = document.createElement("div");
-      cardWrapper.style.display = "contents";
-      cardWrapper.innerHTML = cardHtml;
-      
-      const card = cardWrapper.firstElementChild;
-      
-      const saveBtn = card.querySelector(".save-btn");
-      if (saveBtn) {
-        saveBtn.addEventListener("click", () => {
-          saveBook({
-            id: book.key,
-            title: book.title || "Unknown Title",
-            author: book.author_name ? book.author_name.join(", ") : "Unknown Author",
-            year: book.first_publish_year || null,
-            coverId: book.cover_i || null
-          }, saveBtn);
-        });
-      }
-      
+      const wrap = document.createElement("div");
+      wrap.style.display = "contents";
+      wrap.innerHTML = renderResultCard(book);
+      const card = wrap.firstElementChild;
+
+      card.querySelector(".save-btn")?.addEventListener("click", () => {
+        saveBook({
+          id:      book.key,
+          title:   book.title   || "Unknown Title",
+          author:  book.author_name?.[0] || "Unknown Author",
+          year:    book.first_publish_year || null,
+          coverId: book.cover_i || null,
+        }, card.querySelector(".save-btn"));
+      });
+
       grid.appendChild(card);
     });
-    
-    resultsContainer.appendChild(grid);
-    statusEl.textContent = `Found ${data.docs.length} books in Library network.`;
-    if (taskbarStatus) taskbarStatus.textContent = `Search successful. Rendered ${data.docs.length} matches.`;
-    
-  } catch (error) {
-    console.error("OpenLibrary search failed:", error);
-    resultsContainer.innerHTML = `
-      <div class="no-results">
+
+    results.innerHTML = "";
+    results.appendChild(grid);
+    status.textContent = `${data.docs.length} results found.`;
+
+  } catch (err) {
+    console.error(err);
+    results.innerHTML = `
+      <div class="empty-state">
         <i class="fa-solid fa-triangle-exclamation"></i>
-        <p>API Network Fault: Could not fetch book records.</p>
-        <span style="font-size:10px; color:#ff3b30;">${escapeHTML(error.message)}</span>
-      </div>
-    `;
-    statusEl.textContent = "Search failed.";
-    if (taskbarStatus) taskbarStatus.textContent = "Search failed due to API connectivity failure.";
+        <p>Search failed: ${escHTML(err.message)}</p>
+      </div>`;
+    status.textContent = "Search error.";
   }
 }
 
-// Renders the HTML string for a single search result card
 function renderResultCard(book) {
-  const workId = book.key;
-  const title = book.title || "Unknown Title";
-  const author = book.author_name ? book.author_name.join(", ") : "Unknown Author";
-  const year = book.first_publish_year || "Unknown Year";
-  const coverId = book.cover_i || null;
-  const isSaved = savedBookKeys.has(workId);
-  
-  const coverSrc = coverId 
-    ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` 
-    : "";
+  const id     = book.key;
+  const title  = book.title   || "Unknown Title";
+  const author = book.author_name?.[0] || "Unknown Author";
+  const year   = book.first_publish_year || "—";
+  const cover  = book.cover_i
+    ? `<img class="book-cover-img" src="https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg" alt="${escHTML(title)}" loading="lazy">`
+    : `<div class="book-cover-placeholder"><i class="fa-solid fa-book-skull"></i><span>No Cover</span></div>`;
+  const saved  = savedBookKeys.has(id);
 
   return `
     <div class="book-card">
-      <div class="book-cover-container">
-        ${coverSrc 
-          ? `<img class="book-cover-img" src="${coverSrc}" alt="${escapeHTML(title)}" loading="lazy">` 
-          : `<div class="book-cover-placeholder">
-               <i class="fa-solid fa-book-skull"></i>
-               <span>NO COVER ARCHIVE</span>
-             </div>`
-        }
-      </div>
+      <div class="book-cover-container">${cover}</div>
       <div class="book-info">
-        <span class="book-title" title="${escapeHTML(title)}">${escapeHTML(title)}</span>
-        <span class="book-author" title="${escapeHTML(author)}">${escapeHTML(author)}</span>
+        <span class="book-title"  title="${escHTML(title)}">${escHTML(title)}</span>
+        <span class="book-author" title="${escHTML(author)}">${escHTML(author)}</span>
         <span class="book-year">${year}</span>
       </div>
-      <button class="win95-btn win95-raised save-btn ${isSaved ? 'saved' : ''}" data-work-id="${escapeHTML(workId)}">
-        <i class="fa-solid ${isSaved ? 'fa-check' : 'fa-floppy-disk'}"></i>
-        <span>${isSaved ? 'Saved' : 'Save'}</span>
+      <button class="win95-btn win95-raised save-btn ${saved ? "saved" : ""}" data-work-id="${escHTML(id)}">
+        <i class="fa-solid ${saved ? "fa-check" : "fa-floppy-disk"}"></i>
+        ${saved ? "Saved" : "Save"}
       </button>
-    </div>
-  `;
+    </div>`;
 }
 
 /* ==========================================================================
-   Reading List CRUD Core & Sync Module
+   READING LIST — CRUD
    ========================================================================== */
+async function saveBook(data, btn) {
+  if (savedBookKeys.has(data.id)) return;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving…`;
 
-// Save book data
-async function saveBook(bookData, saveButton) {
-  if (savedBookKeys.has(bookData.id)) return;
-  
-  if (saveButton) {
-    saveButton.disabled = true;
-    saveButton.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Saving...</span>`;
-  }
-  
-  const docPayload = {
-    id: bookData.id,
-    title: bookData.title,
-    author: bookData.author,
-    year: bookData.year,
-    coverId: bookData.coverId,
-    status: "want",
-    savedAt: isFirebaseActive ? serverTimestamp() : new Date().toISOString()
+  const payload = {
+    id:      data.id,
+    title:   data.title,
+    author:  data.author,
+    year:    data.year,
+    coverId: data.coverId,
+    status:  "want",
+    savedAt: isFirebaseActive ? serverTimestamp() : new Date().toISOString(),
   };
 
   try {
     if (isFirebaseActive) {
-      const colRef = collection(db, "books");
-      await addDoc(colRef, docPayload);
+      await addDoc(collection(db, "books"), payload);
     } else {
-      const localBooks = JSON.parse(localStorage.getItem("books95") || "[]");
-      localBooks.push(docPayload);
-      localStorage.setItem("books95", JSON.stringify(localBooks));
-      onLocalListUpdate();
+      const list = localGet();
+      list.unshift(payload);
+      localSet(list);
+      onLocalChange();
     }
-    
-    savedBookKeys.add(bookData.id);
-    
-    if (saveButton) {
-      saveButton.className = "win95-btn win95-raised save-btn saved";
-      saveButton.innerHTML = `<i class="fa-solid fa-check"></i><span>Saved</span>`;
-      saveButton.disabled = true;
-    }
-  } catch (err) {
-    console.error("Save book error:", err);
-    alert("System Fault: Unable to write data to database cores.");
-    if (saveButton) {
-      saveButton.disabled = false;
-      saveButton.innerHTML = `<i class="fa-solid fa-floppy-disk"></i><span>Save</span>`;
-    }
+    savedBookKeys.add(data.id);
+    btn.className = "win95-btn win95-raised save-btn saved";
+    btn.innerHTML = `<i class="fa-solid fa-check"></i> Saved`;
+  } catch (e) {
+    console.error(e);
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save`;
+    alert("Error saving book. Check console.");
   }
 }
 
-// Real-time synchronization setting up onSnapshot listener
 function loadReadingList() {
-  const statusEl = document.getElementById("list-status");
-  
+  const status = document.getElementById("list-status");
   if (isFirebaseActive) {
-    statusEl.textContent = "Syncing with Firestore database...";
-    
-    const colRef = collection(db, "books");
-    const q = query(colRef, orderBy("savedAt", "desc"));
-    
-    onSnapshot(q, (snapshot) => {
+    status.textContent = "Connecting to Firestore…";
+    const q = query(collection(db, "books"), orderBy("savedAt", "desc"));
+    onSnapshot(q, snap => {
       readingList = [];
       savedBookKeys.clear();
-      
-      snapshot.forEach(docSnap => {
-        const item = docSnap.data();
-        item.docId = docSnap.id;
+      snap.forEach(d => {
+        const item = { ...d.data(), docId: d.id };
         readingList.push(item);
         savedBookKeys.add(item.id);
       });
-      
-      renderReadingListContainer();
+      renderList();
       updateStats();
-      statusEl.textContent = "Real-time sync connection active.";
-    }, (err) => {
-      console.error("Firestore onSnapshot sync failed:", err);
-      statusEl.textContent = "Firestore sync failure, switching to Local Mode.";
+      status.textContent = "Firestore sync active.";
+    }, err => {
+      console.error(err);
       isFirebaseActive = false;
-      updateDbStatusTray();
+      updateTray();
       loadReadingList();
     });
   } else {
-    statusEl.textContent = "Loading offline cyber-archives...";
-    onLocalListUpdate();
+    onLocalChange();
   }
 }
 
-// Local mode handler
-function onLocalListUpdate() {
-  const localBooks = JSON.parse(localStorage.getItem("books95") || "[]");
-  
-  localBooks.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
-  
-  readingList = localBooks.map((item, idx) => {
-    item.docId = idx.toString();
-    return item;
-  });
-  
+function onLocalChange() {
+  const raw = localGet();
+  raw.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+  readingList = raw.map((item, i) => ({ ...item, docId: String(i) }));
   savedBookKeys.clear();
-  readingList.forEach(item => savedBookKeys.add(item.id));
-  
-  renderReadingListContainer();
+  readingList.forEach(b => savedBookKeys.add(b.id));
+  renderList();
   updateStats();
-  
-  document.getElementById("list-status").textContent = "Offline cyber-records loaded.";
+  document.getElementById("list-status").textContent = "Local storage active.";
 }
 
-// Status toggle handler
 async function toggleStatus(docId, current) {
-  const statusEl = document.getElementById("list-status");
-  statusEl.textContent = "Updating status...";
-  
-  const targetStatus = current === "read" ? "want" : "read";
-  
-  try {
-    if (isFirebaseActive) {
-      const docRef = doc(db, "books", docId);
-      await updateDoc(docRef, { status: targetStatus });
-    } else {
-      const localBooks = JSON.parse(localStorage.getItem("books95") || "[]");
-      const bookIdx = parseInt(docId);
-      if (!isNaN(bookIdx) && localBooks[bookIdx]) {
-        localBooks[bookIdx].status = targetStatus;
-        localStorage.setItem("books95", JSON.stringify(localBooks));
-        onLocalListUpdate();
-      }
-    }
-  } catch (err) {
-    console.error("Toggle status failed:", err);
-    statusEl.textContent = "Error updating read status.";
-  }
-}
-
-// Delete book handler
-async function deleteBook(docId) {
-  const statusEl = document.getElementById("list-status");
-  if (!confirm("Are you sure you want to scrub this entry from cyber-records?")) return;
-  
-  statusEl.textContent = "Deleting record...";
-  
-  let targetKey = "";
+  const next = current === "read" ? "want" : "read";
   if (isFirebaseActive) {
-    const book = readingList.find(b => b.docId === docId);
-    if (book) targetKey = book.id;
+    await updateDoc(doc(db, "books", docId), { status: next });
   } else {
-    const bookIdx = parseInt(docId);
-    if (!isNaN(bookIdx) && readingList[bookIdx]) {
-      targetKey = readingList[bookIdx].id;
-    }
-  }
-  
-  try {
-    if (isFirebaseActive) {
-      const docRef = doc(db, "books", docId);
-      await deleteDoc(docRef);
-    } else {
-      let localBooks = JSON.parse(localStorage.getItem("books95") || "[]");
-      const bookIdx = parseInt(docId);
-      
-      if (!isNaN(bookIdx)) {
-        localBooks.splice(bookIdx, 1);
-        localStorage.setItem("books95", JSON.stringify(localBooks));
-        onLocalListUpdate();
-      }
-    }
-    
-    if (targetKey) {
-      savedBookKeys.delete(targetKey);
-    }
-    
-    syncSaveButtonsState();
-    
-  } catch (err) {
-    console.error("Delete book failed:", err);
-    statusEl.textContent = "Error purging record.";
+    const list  = localGet();
+    const idx   = parseInt(docId);
+    if (list[idx]) { list[idx].status = next; localSet(list); onLocalChange(); }
   }
 }
 
-// Keep the Save buttons in search window correctly state-synced on deletion
-function syncSaveButtonsState() {
-  const saveButtons = document.querySelectorAll(".search-results-viewport .save-btn");
-  saveButtons.forEach(btn => {
-    const workId = btn.dataset.workId;
-    if (!savedBookKeys.has(workId)) {
+async function deleteBook(docId) {
+  if (!confirm("Remove this book from your list?")) return;
+  const book = readingList.find(b => b.docId === docId);
+  if (isFirebaseActive) {
+    await deleteDoc(doc(db, "books", docId));
+  } else {
+    const list = localGet();
+    list.splice(parseInt(docId), 1);
+    localSet(list);
+    onLocalChange();
+  }
+  if (book) {
+    savedBookKeys.delete(book.id);
+    refreshSaveBtns();
+  }
+}
+
+function refreshSaveBtns() {
+  document.querySelectorAll(".save-btn[data-work-id]").forEach(btn => {
+    if (!savedBookKeys.has(btn.dataset.workId)) {
       btn.className = "win95-btn win95-raised save-btn";
-      btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i><span>Save</span>`;
-      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save`;
+      btn.disabled  = false;
     }
   });
 }
 
-// Renders the HTML string for a single reading list table row
+/* ==========================================================================
+   RENDER — Reading List
+   ========================================================================== */
+function renderList() {
+  const filter    = document.getElementById("list-filter-select").value;
+  const container = document.getElementById("reading-list-container");
+  if (!container) return;
+
+  const filtered = readingList.filter(b =>
+    filter === "all" ? true : b.status === filter
+  );
+
+  if (!filtered.length) {
+    container.innerHTML = `
+      <div class="list-empty">
+        <i class="fa-solid fa-ghost"></i>
+        <p>${filter === "all" ? "Your reading list is empty." : "No books matching this filter."}</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="list-header-row">
+      <div class="list-header-cell">Cover</div>
+      <div class="list-header-cell">Title</div>
+      <div class="list-header-cell">Author</div>
+      <div class="list-header-cell">Year</div>
+      <div class="list-header-cell">Actions</div>
+    </div>
+    ${filtered.map(renderListItem).join("")}`;
+
+  container.querySelectorAll(".toggle-btn").forEach(btn => {
+    btn.addEventListener("click", () => toggleStatus(btn.dataset.docId, btn.dataset.status));
+  });
+  container.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteBook(btn.dataset.docId));
+  });
+}
+
 function renderListItem(book) {
-  const coverSrc = book.coverId 
-    ? `https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg` 
-    : "";
-    
+  const cover = book.coverId
+    ? `<img src="https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg" alt="" loading="lazy">`
+    : `<i class="fa-solid fa-book-skull" style="color:var(--win-grey-dark)"></i>`;
   const isRead = book.status === "read";
 
   return `
-    <tr class="list-row" data-id="${escapeHTML(book.id)}">
-      <td class="list-cell cover">
-        <div class="list-cell-cover-container">
-          ${coverSrc 
-            ? `<img class="list-cell-cover-img" src="${coverSrc}" alt="${escapeHTML(book.title)}" loading="lazy">` 
-            : `<i class="fa-solid fa-book-skull" style="color:var(--win-grey-dark); font-size:14px;"></i>`
-          }
-        </div>
-      </td>
-      <td class="list-cell title" title="${escapeHTML(book.title)}">${escapeHTML(book.title)}</td>
-      <td class="list-cell author" title="${escapeHTML(book.author)}">${escapeHTML(book.author)}</td>
-      <td class="list-cell year">${book.year || "-"}</td>
-      <td class="list-cell actions">
-        <button class="win95-btn win95-raised toggle-status-btn ${isRead ? 'read' : 'want'}" 
-                data-doc-id="${escapeHTML(book.docId)}" 
-                data-status="${escapeHTML(book.status)}">
-          <i class="fa-solid ${isRead ? 'fa-square-check' : 'fa-square'}"></i>
-          <span>${isRead ? 'Read' : 'Want to Read'}</span>
+    <div class="list-row">
+      <div class="list-cell cover">
+        <div class="list-cell-thumb">${cover}</div>
+      </div>
+      <div class="list-cell title-cell" title="${escHTML(book.title)}">${escHTML(book.title)}</div>
+      <div class="list-cell" title="${escHTML(book.author)}">${escHTML(book.author)}</div>
+      <div class="list-cell year">${book.year || "—"}</div>
+      <div class="list-cell actions">
+        <button class="win95-btn win95-raised toggle-btn ${isRead ? "read" : "want"}"
+                data-doc-id="${escHTML(book.docId)}" data-status="${book.status}">
+          <i class="fa-solid ${isRead ? "fa-square-check" : "fa-square"}"></i>
+          ${isRead ? "Read" : "Want"}
         </button>
-        <button class="win95-btn win95-raised delete-btn" 
-                data-doc-id="${escapeHTML(book.docId)}">
+        <button class="win95-btn win95-raised delete-btn" data-doc-id="${escHTML(book.docId)}">
           <i class="fa-solid fa-trash-can"></i>
         </button>
-      </td>
-    </tr>
-  `;
-}
-
-// Renders the overall list inside reading-list-viewport
-function renderReadingListContainer() {
-  const filterVal = document.getElementById("list-filter-select").value;
-  const container = document.getElementById("reading-list-container");
-  
-  if (!container) return;
-  
-  const filteredList = readingList.filter(book => {
-    if (filterVal === "all") return true;
-    return book.status === filterVal;
-  });
-  
-  if (filteredList.length === 0) {
-    container.innerHTML = `
-      <div class="empty-list">
-        <i class="fa-solid fa-ghost"></i>
-        <p>No books matching the selected filter state.</p>
-        <button class="win95-btn win95-raised" id="find-empty-btn">
-          Find Books
-        </button>
       </div>
-    `;
-    
-    const findBtn = container.querySelector("#find-empty-btn");
-    if (findBtn) {
-      findBtn.addEventListener("click", () => {
-        const searchInput = document.getElementById("search-input");
-        if (searchInput) searchInput.focus();
-        const searchPanel = document.getElementById("search-panel");
-        const listPanel = document.getElementById("list-panel");
-        if (searchPanel && listPanel) {
-          searchPanel.classList.add("active");
-          listPanel.classList.remove("active");
-        }
-      });
-    }
-    return;
-  }
-  
-  let tableHtml = `
-    <table class="list-table-container">
-      <thead class="list-table-header">
-        <tr style="display:contents;">
-          <th class="list-header-cell">Cover</th>
-          <th class="list-header-cell">Book Title</th>
-          <th class="list-header-cell">Author</th>
-          <th class="list-header-cell">Year</th>
-          <th class="list-header-cell">Cyber-Logs / Action</th>
-        </tr>
-      </thead>
-      <tbody id="list-table-body" style="display:contents;">
-  `;
-  
-  filteredList.forEach(book => {
-    tableHtml += renderListItem(book);
-  });
-  
-  tableHtml += `
-      </tbody>
-    </table>
-  `;
-  
-  container.innerHTML = tableHtml;
-  
-  // Register item action event listeners
-  container.querySelectorAll(".toggle-status-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      toggleStatus(btn.dataset.docId, btn.dataset.status);
-    });
-  });
-  
-  container.querySelectorAll(".delete-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      deleteBook(btn.dataset.docId);
-    });
-  });
+    </div>`;
 }
 
 function updateStats() {
-  let read = 0;
-  let want = 0;
-  
-  readingList.forEach(book => {
-    if (book.status === "read") read++;
-    else want++;
-  });
-  
-  const rStats = document.getElementById("stats-read");
-  const wStats = document.getElementById("stats-want");
-  
-  if (rStats) rStats.textContent = read;
-  if (wStats) wStats.textContent = want;
+  const read = readingList.filter(b => b.status === "read").length;
+  const want = readingList.length - read;
+  const r = document.getElementById("stats-read");
+  const w = document.getElementById("stats-want");
+  if (r) r.textContent = read;
+  if (w) w.textContent = want;
 }
 
 /* ==========================================================================
-   Helper Utilities & Sanitizers
+   LOCAL STORAGE HELPERS
    ========================================================================== */
-function escapeHTML(str) {
-  if (typeof str !== 'string') return '';
-  return str.replace(/[&<>'"]/g, 
-    tag => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      "'": '&#39;',
-      '"': '&quot;'
-    }[tag] || tag)
-  );
+const localGet = ()       => JSON.parse(localStorage.getItem("books95") || "[]");
+const localSet = list     => localStorage.setItem("books95", JSON.stringify(list));
+
+/* ==========================================================================
+   SANITIZER
+   ========================================================================== */
+function escHTML(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
 /* ==========================================================================
-   Global Event Handlers Setup
+   EVENT WIRING — runs on DOMContentLoaded
    ========================================================================== */
 window.addEventListener("DOMContentLoaded", () => {
   initFirebase();
   runBootScreen();
-  
-  // Start menu items click
-  const aboutTrigger = document.getElementById("start-about-trigger");
-  if (aboutTrigger) {
-    aboutTrigger.addEventListener("click", () => {
-      toggleStartMenu(false);
-      showAboutModal();
-    });
-  }
 
-  // Dropdown menu file shutdown triggers
-  const fileShutdown = document.getElementById("menu-file-shutdown");
-  if (fileShutdown) {
-    fileShutdown.addEventListener("click", () => {
-      showShutdown();
-    });
-  }
+  // Skip boot
+  document.getElementById("skip-boot-btn")?.addEventListener("click", dismissBoot);
+  window.addEventListener("keydown", e => { if (e.key === "Escape") dismissBoot(); });
 
-  const helpAbout = document.getElementById("menu-help-about");
-  if (helpAbout) {
-    helpAbout.addEventListener("click", () => {
-      showAboutModal();
-    });
-  }
+  // Search
+  const inp = document.getElementById("search-input");
+  const btn = document.getElementById("search-submit");
+  btn?.addEventListener("click",  () => searchBooks(inp.value));
+  inp?.addEventListener("keypress", e => { if (e.key === "Enter") searchBooks(inp.value); });
 
-  const titleClose = document.getElementById("title-bar-close");
-  if (titleClose) {
-    titleClose.addEventListener("click", () => {
-      showShutdown();
-    });
-  }
-  
-  // About window close triggers
-  const aboutClose = document.getElementById("about-close-btn");
-  const aboutOk = document.getElementById("about-ok-btn");
-  if (aboutClose) aboutClose.addEventListener("click", hideAboutModal);
-  if (aboutOk) aboutOk.addEventListener("click", hideAboutModal);
-  
-  // OpenLibrary Search submit hooks
-  const searchInput = document.getElementById("search-input");
-  const searchBtn = document.getElementById("search-submit");
-  
-  if (searchInput && searchBtn) {
-    searchBtn.addEventListener("click", () => {
-      searchBooks(searchInput.value);
-    });
-    
-    searchInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        searchBooks(searchInput.value);
-      }
-    });
-  }
-  
-  // Reading List Filter Dropdown change hook
-  const filterSelect = document.getElementById("list-filter-select");
-  if (filterSelect) {
-    filterSelect.addEventListener("change", () => {
-      renderReadingListContainer();
-    });
-  }
-  
-  // System Shutdown overlays
-  const shutdownBtn = document.getElementById("start-menu-shutdown");
-  const rebootBtn = document.getElementById("reboot-btn");
-  const shutdownOverlay = document.getElementById("shutdown-overlay");
-  
-  function showShutdown() {
-    toggleStartMenu(false);
-    if (shutdownOverlay) shutdownOverlay.classList.remove("hidden");
-  }
+  // Filter
+  document.getElementById("list-filter-select")
+    ?.addEventListener("change", renderList);
 
-  if (shutdownBtn) {
-    shutdownBtn.addEventListener("click", () => {
-      showShutdown();
-    });
-  }
-  
-  if (rebootBtn) {
-    rebootBtn.addEventListener("click", () => {
-      if (shutdownOverlay) shutdownOverlay.classList.add("hidden");
-      window.location.reload();
-    });
-  }
-  
-  // Boot Skip Keyboard hook (ESC)
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      dismissBootScreen();
-    }
+  // Start menu
+  document.getElementById("start-button")
+    ?.addEventListener("click", e => { e.stopPropagation(); toggleStartMenu(); });
+
+  // Start menu items
+  document.getElementById("start-about-trigger")
+    ?.addEventListener("click", () => { toggleStartMenu(false); showAbout(); });
+  document.getElementById("start-menu-shutdown")
+    ?.addEventListener("click", showShutdown);
+
+  // Menu bar items
+  document.getElementById("menu-file-shutdown") ?.addEventListener("click", showShutdown);
+  document.getElementById("menu-help-about")    ?.addEventListener("click", showAbout);
+  document.getElementById("menu-view-search")
+    ?.addEventListener("click", () => { setActivePanel("search-panel"); document.getElementById("search-input")?.focus(); });
+  document.getElementById("menu-view-list")
+    ?.addEventListener("click", () => setActivePanel("list-panel"));
+
+  // Title bar buttons
+  document.getElementById("title-bar-close")?.addEventListener("click", showShutdown);
+  document.getElementById("title-bar-min")  ?.addEventListener("click", () => {
+    /* no-op on a web app — could minimize taskbar icon visually */
   });
-  
-  const skipBtn = document.getElementById("skip-boot-btn");
-  if (skipBtn) {
-    skipBtn.addEventListener("click", () => {
-      dismissBootScreen();
-    });
-  }
+  document.getElementById("title-bar-max")  ?.addEventListener("click", () => {
+    /* already full screen — no-op */
+  });
+
+  // About modal
+  document.getElementById("about-close-btn")?.addEventListener("click", hideAbout);
+  document.getElementById("about-ok-btn")   ?.addEventListener("click", hideAbout);
+
+  // Shutdown / reboot
+  document.getElementById("reboot-btn")?.addEventListener("click", () => window.location.reload());
 });

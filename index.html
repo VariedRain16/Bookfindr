@@ -4,23 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BookFinder 95 — Cyberpunk Reading Tracker</title>
-  
-  <!-- FontAwesome Icons -->
+  <meta name="description" content="A personal book search and reading list tracker with a Windows 95 cyberpunk aesthetic. Search millions of books and track your reading.">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
-  <!-- Custom Windows 95 Cyberpunk Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- ==========================================================================
-       1. Boot splash screen (first-load retro BIOS feel)
-       ========================================================================== -->
+  <!-- Boot Screen -->
   <div id="boot-screen">
-    <div class="boot-logs" id="boot-logs-console">
-      <!-- Logs will be appended via app.js -->
-    </div>
-    
+    <div class="boot-logs" id="boot-logs-console"></div>
     <div class="boot-logo-container">
       <div class="boot-logo">BookFinder 95</div>
       <div class="boot-subtitle">Cybernetic Library System</div>
@@ -28,90 +20,108 @@
         <div class="boot-progress-bar" id="boot-progress"></div>
       </div>
     </div>
-    
     <div class="boot-footer">
-      <span>SYSTEM VERSION 4.00.950 | RAM: 16384 KB</span>
-      <button class="skip-btn" id="skip-boot-btn">Skip Boot [ESC]</button>
+      <span>SYSTEM VERSION 4.00.950 &nbsp;|&nbsp; RAM: 16384 KB</span>
+      <button class="skip-btn" id="skip-boot-btn">Skip [ESC]</button>
     </div>
   </div>
 
-  <!-- ==========================================================================
-       2. Main Application Window (Full Screen Database Workspace)
-       ========================================================================== -->
+  <!-- Main App Window -->
   <div id="app-window" class="win95-raised">
-    <!-- Window Title Bar -->
-    <div class="title-bar">
+
+    <!-- Title Bar -->
+    <div class="title-bar" id="app-title-bar">
       <div class="title-bar-text">
-        <i class="fa-solid fa-network-wired"></i>
+        <i class="fa-solid fa-book-skull"></i>
         <span>BookFinder 95 — Cybernetic Library System</span>
       </div>
       <div class="title-bar-controls">
-        <button class="win95-btn title-bar-btn" id="title-bar-close" title="Shut Down System">X</button>
+        <button class="win95-btn title-bar-btn" id="title-bar-min" title="Minimize">_</button>
+        <button class="win95-btn title-bar-btn" id="title-bar-max" title="Maximize">□</button>
+        <button class="win95-btn title-bar-btn" id="title-bar-close" title="Shut Down">✕</button>
       </div>
     </div>
 
-    <!-- Dropdown Menu Bar -->
+    <!-- Classic Menu Bar -->
     <div class="menu-bar">
-      <div class="menu-item">
-        File
+      <div class="menu-item" tabindex="0">
+        <span>File</span>
         <div class="dropdown-menu">
-          <button class="dropdown-item" id="menu-file-shutdown"><i class="fa-solid fa-power-off"></i> Shut Down...</button>
+          <button class="dropdown-item" id="menu-file-shutdown">
+            <i class="fa-solid fa-power-off"></i> Shut Down...
+          </button>
         </div>
       </div>
-      <div class="menu-item">
-        Help
+      <div class="menu-item" tabindex="0">
+        <span>View</span>
         <div class="dropdown-menu">
-          <button class="dropdown-item" id="menu-help-about"><i class="fa-solid fa-circle-info"></i> About BookFinder 95</button>
+          <button class="dropdown-item" id="menu-view-search">
+            <i class="fa-solid fa-magnifying-glass"></i> Book Search
+          </button>
+          <button class="dropdown-item" id="menu-view-list">
+            <i class="fa-solid fa-book-bookmark"></i> Reading List
+          </button>
+        </div>
+      </div>
+      <div class="menu-item" tabindex="0">
+        <span>Help</span>
+        <div class="dropdown-menu">
+          <button class="dropdown-item" id="menu-help-about">
+            <i class="fa-solid fa-circle-info"></i> About BookFinder 95
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- Main Client Panels (Split Side-by-Side) -->
+    <!-- Split Panel Area -->
     <div class="app-panels">
-      <!-- Left Panel: Book Search -->
-      <div class="panel win95-raised active" id="search-panel">
-        <div class="panel-header">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <span>Book Search</span>
+
+      <!-- LEFT: Book Search Panel -->
+      <div class="panel active" id="search-panel">
+        <div class="panel-title-bar">
+          <span><i class="fa-solid fa-magnifying-glass"></i> Book Search</span>
         </div>
         <div class="panel-body">
-          <!-- Toolbar inputs -->
           <div class="search-toolbar">
             <div class="search-input-wrapper win95-sunken">
-              <input type="text" id="search-input" placeholder="Type book title, author, or ISBN..." autocomplete="off">
+              <input type="text" id="search-input" placeholder="Search by title, author or ISBN..." autocomplete="off">
             </div>
             <button class="win95-btn win95-raised search-btn" id="search-submit">
-              <i class="fa-solid fa-magnifying-glass"></i> Find
+              <i class="fa-solid fa-magnifying-glass"></i>&nbsp;Find
             </button>
           </div>
-
-          <!-- Scrollable Search Results Viewport -->
           <div class="search-results-viewport win95-sunken custom-scrollbar" id="search-results">
-            <div class="no-results">
+            <div class="empty-state">
               <i class="fa-solid fa-book-open"></i>
-              <p>Ready to search OpenLibrary database.</p>
+              <p>Ready to search the OpenLibrary database.</p>
+              <p class="hint">Type a title or author above and press Find.</p>
             </div>
           </div>
-
-          <!-- Panel Status bar -->
           <div class="status-bar">
             <div class="status-bar-field win95-sunken" id="search-status">Ready.</div>
           </div>
         </div>
       </div>
 
-      <!-- Right Panel: Reading List -->
-      <div class="panel win95-raised" id="list-panel">
-        <div class="panel-header">
-          <i class="fa-solid fa-book-bookmark"></i>
-          <span>Reading List</span>
+      <!-- Panel Divider (draggable feel) -->
+      <div class="panel-divider"></div>
+
+      <!-- RIGHT: Reading List Panel -->
+      <div class="panel" id="list-panel">
+        <div class="panel-title-bar">
+          <span><i class="fa-solid fa-book-bookmark"></i> My Reading List</span>
+          <div class="panel-title-actions">
+            <span class="list-stats">
+              ✓ <span id="stats-read">0</span> read &nbsp;·&nbsp;
+              ☆ <span id="stats-want">0</span> want
+            </span>
+          </div>
         </div>
         <div class="panel-body">
-          <!-- Filters & Statistics -->
           <div class="list-toolbar">
             <div class="list-filters">
-              <span>Filter:</span>
-              <div class="win95-sunken" style="display:inline-block;">
+              <label for="list-filter-select">Show:</label>
+              <div class="win95-sunken select-wrapper">
                 <select id="list-filter-select">
                   <option value="all">All Books</option>
                   <option value="want">Want to Read</option>
@@ -119,120 +129,97 @@
                 </select>
               </div>
             </div>
-            <div class="list-stats" id="list-stats">
-              Read: <span id="stats-read">0</span> | Want: <span id="stats-want">0</span>
-            </div>
           </div>
-
-          <!-- Scrollable Reading List Grid/Table -->
           <div class="reading-list-viewport win95-sunken custom-scrollbar" id="reading-list-container">
-            <!-- Content dynamically populated via app.js -->
+            <!-- Populated by app.js -->
           </div>
-
-          <!-- Panel Status bar -->
           <div class="status-bar">
-            <div class="status-bar-field win95-sunken" id="list-status">Initializing database sync...</div>
+            <div class="status-bar-field win95-sunken" id="list-status">Initializing...</div>
           </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- ==========================================================================
-       3. Start Menu popup component
-       ========================================================================== -->
-  <div id="start-menu" class="win95-raised hidden">
-    <div class="start-menu-sidebar">
-      <div class="start-menu-sidebar-text">BookFinder95</div>
-    </div>
-    
-    <div class="start-menu-list">
-      <button class="start-menu-item" id="start-about-trigger">
-        <i class="fa-solid fa-circle-info"></i>
-        <span>About App</span>
-      </button>
-      
-      <div class="start-menu-divider"></div>
-      
-      <button class="start-menu-item" id="start-menu-shutdown">
-        <i class="fa-solid fa-power-off"></i>
-        <span>Shut Down...</span>
-      </button>
-    </div>
-  </div>
+    </div><!-- /.app-panels -->
+  </div><!-- /#app-window -->
 
-  <!-- ==========================================================================
-       4. Bottom Taskbar (Acts as Application Status Bar)
-       ========================================================================== -->
+  <!-- Taskbar -->
   <div id="taskbar" class="win95-raised">
     <div class="taskbar-left">
-      <!-- Start Button -->
       <button class="win95-btn win95-raised start-btn" id="start-button">
-        <i class="fa-solid fa-network-wired"></i> Start
+        <i class="fa-solid fa-network-wired"></i>&nbsp; Start
       </button>
-      
-      <!-- General System Status Message -->
-      <span class="taskbar-status-text" id="taskbar-status">System active. Ready.</span>
+      <div class="taskbar-divider"></div>
+      <span class="taskbar-app-tab active" id="taskbar-app-tab">
+        <i class="fa-solid fa-book-skull"></i> BookFinder 95
+      </span>
     </div>
-    
-    <!-- System Tray -->
     <div class="system-tray win95-sunken">
-      <!-- DB connection status -->
-      <div class="db-status" id="tray-db-status" title="Connection Mode">
+      <div class="db-status" id="tray-db-status" title="Database connection">
         <div class="status-dot" id="tray-db-dot"></div>
         <span id="tray-db-text">Local</span>
       </div>
-      
-      <!-- Tray Clock -->
-      <div class="tray-clock" id="tray-clock">00:00 AM</div>
+      <div class="tray-sep"></div>
+      <div class="tray-clock" id="tray-clock">12:00 PM</div>
     </div>
   </div>
 
-  <!-- ==========================================================================
-       5. About Dialog Overlay (Centered Modal)
-       ========================================================================== -->
-  <div id="about-modal-overlay" class="hidden">
-    <div class="win95-window win95-raised about-window">
+  <!-- Start Menu -->
+  <div id="start-menu" class="win95-raised hidden">
+    <div class="start-menu-sidebar">
+      <span class="start-menu-sidebar-text">BookFinder 95</span>
+    </div>
+    <div class="start-menu-list">
+      <button class="start-menu-item" id="start-about-trigger">
+        <i class="fa-solid fa-circle-info"></i> About App
+      </button>
+      <div class="start-menu-divider"></div>
+      <button class="start-menu-item" id="start-menu-shutdown">
+        <i class="fa-solid fa-power-off"></i> Shut Down...
+      </button>
+    </div>
+  </div>
+
+  <!-- About Dialog -->
+  <div id="about-modal-overlay" class="modal-overlay hidden">
+    <div class="win95-raised modal-window">
       <div class="title-bar">
         <div class="title-bar-text">
           <i class="fa-solid fa-circle-info"></i>
           <span>About BookFinder 95</span>
         </div>
         <div class="title-bar-controls">
-          <button class="win95-btn title-bar-btn" id="about-close-btn" title="Close">X</button>
+          <button class="win95-btn title-bar-btn" id="about-close-btn">✕</button>
         </div>
       </div>
-      
-      <div class="window-body" style="padding: 15px;">
+      <div class="modal-body">
         <div class="about-logo-area">
           <i class="fa-solid fa-book-skull about-icon"></i>
-          <span class="about-title">BookFinder 95</span>
+          <div>
+            <div class="about-title">BookFinder 95</div>
+            <div class="about-version">Version 4.00.950</div>
+          </div>
         </div>
         <p class="about-text">
-          A personal library search and reading log styled as a Windows 95 desktop, fused with neon cyberpunk styling accents.
-          <br><br>
-          Developed for the net-runners of the 21st century. Connects directly to OpenLibrary API for searching and Firebase Firestore for persistent synchronization.
+          A cyberpunk-styled book search and reading list tracker. Search millions of books via the OpenLibrary API and sync your reading list to Firebase Firestore in real time.
         </p>
-        <button class="win95-btn win95-raised about-footer-btn" id="about-ok-btn" style="float: right;">OK</button>
+        <div class="modal-footer">
+          <button class="win95-btn win95-raised" id="about-ok-btn" style="padding: 4px 20px; font-weight: bold;">OK</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ==========================================================================
-       6. Shutdown overlay (safe shutdown state screen)
-       ========================================================================== -->
+  <!-- Shutdown Screen -->
   <div id="shutdown-overlay" class="hidden">
-    <i class="fa-solid fa-terminal"></i>
-    <p style="font-size: 24px; font-weight: bold; margin-bottom: 10px;">IT IS NOW SAFE TO TURN OFF</p>
-    <p style="font-size: 24px; font-weight: bold; margin-bottom: 30px;">YOUR BOOKFINDER TERMINAL.</p>
-    <button class="win95-btn win95-raised" id="reboot-btn" style="padding: 6px 15px; font-weight: bold; color: var(--win-white); border: 1px solid var(--neon-blue);">
-      Reboot System
+    <i class="fa-solid fa-power-off"></i>
+    <p>It is now safe to turn off your</p>
+    <h1>BookFinder Terminal.</h1>
+    <button class="win95-btn win95-raised" id="reboot-btn">
+      <i class="fa-solid fa-rotate-right"></i> Reboot
     </button>
   </div>
 
-  <!-- ==========================================================================
-       7. Script Imports
-       ========================================================================== -->
+  <!-- Firebase + App Scripts -->
   <script type="importmap">
     {
       "imports": {
@@ -241,7 +228,7 @@
       }
     }
   </script>
-  
   <script type="module" src="app.js"></script>
+
 </body>
 </html>
